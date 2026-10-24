@@ -1,0 +1,269 @@
+image:
+  name: ps5-omarchy
+  distribution: archlinux
+  release: rolling
+  description: Omarchy (Arch + Hyprland) desktop for PS5
+  architecture: x86_64
+source:
+  downloader: archlinux-http
+  url: https://geo.mirror.pkgbuild.com/iso
+  skip_verification: true
+packages:
+  manager: pacman
+  update: true
+  cleanup: true
+  repositories:
+  - name: mirrorlist
+    url: |-
+      Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
+      Server = https://mirrors.kernel.org/archlinux/$repo/os/$arch
+  sets:
+  - packages:
+    # Runtime subset of install/omarchy-base.packages + omarchy-other.packages.
+    # Left out: ISO-provided kernels (linux-omarchy, linux-t2), DKMS trees
+    # (nvidia*, broadcom-wl, asusctl, tuxedo-drivers, t2fanrd, macbook12-spi),
+    # boot tie-ins (limine*, snapper, plymouth) and Intel/apple-only pieces.
+    - alsa-utils
+    - avahi
+    - base
+    - base-devel
+    - bash-completion
+    - bat
+    - bluez
+    - bluez-utils
+    - bolt
+    - brightnessctl
+    - btop
+    - chromium
+    - cups
+    - cups-filters
+    - cups-pk-helper
+    - ddcutil
+    - docker
+    - docker-buildx
+    - docker-compose
+    - dosfstools
+    - expac
+    - eza
+    - fakeroot
+    - fastfetch
+    - fd
+    - ffmpeg
+    - ffmpegthumbnailer
+    - fzf
+    - git
+    - gnome-keyring
+    - gnome-themes-extra
+    - grim
+    - gum
+    - gvfs-mtp
+    - gvfs-nfs
+    - gvfs-smb
+    - hyprland
+    - hyprland-guiutils
+    - hyprland-preview-share-picker
+    - hyprpicker
+    - hyprsunset
+    - imagemagick
+    - imv
+    - inetutils
+    - inotify-tools
+    - inxi
+    - jq
+    - kernel-modules-hook
+    - lazygit
+    - less
+    - libsecret
+    - libvips
+    - libyaml
+    - libreoffice-fresh
+    - lua51
+    - luarocks
+    - man-db
+    - mise-bin
+    - mpv
+    - nautilus
+    - nautilus-python
+    - networkmanager
+    - noto-fonts
+    - noto-fonts-cjk
+    - noto-fonts-emoji
+    - nss-mdns
+    - nvim
+    - pacman-contrib
+    - pamixer
+    - pinta
+    - plocate
+    - power-profiles-daemon
+    - python-gobject
+    - python-poetry-core
+    - qemu-user-static-binfmt
+    - qrencode
+    - quickshell
+    - ripgrep
+    - ruby
+    - socat
+    - starship
+    - sushi
+    - tesseract
+    - tesseract-data-eng
+    - tldr
+    - tmux
+    - tree-sitter-cli
+    - ttf-ia-writer
+    - ttf-jetbrains-mono-nerd-basic
+    - tzupdate
+    - udiskie
+    - unzip
+    - vi
+    - whois
+    - wireless-regdb
+    # Display / GPU (AMD Oberon)
+    - mesa
+    - vulkan-radeon
+    - libva-mesa-driver
+    - xf86-video-amdgpu
+    - libinput
+    - xkeyboard-config
+    # Wayland plumbing
+    - foot
+    - pipewire
+    - pipewire-alsa
+    - pipewire-jack
+    - pipewire-pulse
+    - wireplumber
+    - gst-plugin-pipewire
+    - gtk4-layer-shell
+    - qt6-base
+    - qt6-declarative
+    - qt6-imageformats
+    - qt6-multimedia
+    - qt6-svg
+    - qt6-wayland
+    - wl-clipboard
+    - wtype
+    - xdg-desktop-portal-gtk
+    - xdg-desktop-portal-hyprland
+    - xdg-terminal-exec
+    - zbar
+    # System
+    - dbus
+    - e2fsprogs
+    - egl-wayland
+    - htop
+    - kexec-tools
+    - kmod
+    - linux-firmware
+    - mkinitcpio
+    - openssh
+    - parted
+    - polkit
+    - seatd
+    - sudo
+    - zoxide
+    action: install
+files:
+- path: /etc/hostname
+  generator: hostname
+- path: /etc/hosts
+  generator: hosts
+- path: /etc/kernel/postinst.d/zz-update-boot
+  generator: copy
+  source: /tmp/build-staging/zz-update-boot
+  mode: "0755"
+- path: /etc/fstab
+  generator: copy
+  source: /tmp/build-staging/fstab
+- path: /usr/local/sbin/grow-rootfs
+  generator: copy
+  source: /tmp/build-staging/grow-rootfs
+  mode: "0755"
+- path: /etc/systemd/system/grow-rootfs.service
+  generator: copy
+  source: /tmp/build-staging/grow-rootfs.service
+- path: /opt/pkgs/
+  generator: copy
+  source: /tmp/build-staging/pkgs
+actions:
+- trigger: post-unpack
+  action: |-
+    #!/bin/bash
+    set -eux
+    # Pacman 7 Landlock sandbox is unsupported under QEMU; disable it.
+    sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
+    pacman-key --init
+    pacman-key --populate archlinux
+    pacman -Syy --noconfirm
+- trigger: post-packages
+  action: |-
+    #!/bin/bash
+    set -eux
+    # fc-cache / systemctl can SIGSEGV under QEMU when the image platform is
+    # linux/amd64 on an arm64 host.
+    fc-cache -f 2>/dev/null || true
+    symlink_wants() {
+      local src=$1
+      local target=$2
+      [ -e "$src" ] || return 0
+      mkdir -p "/etc/systemd/system/${target}.wants"
+      ln -sf "$src" "/etc/systemd/system/${target}.wants/$(basename "$src")"
+    }
+    sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/'               /etc/ssh/sshd_config
+    sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    symlink_wants /usr/lib/systemd/system/sshd.service multi-user.target
+    symlink_wants /usr/lib/systemd/system/NetworkManager.service multi-user.target
+    symlink_wants /usr/lib/systemd/system/seatd.service multi-user.target
+    for s in pipewire pipewire-pulse wireplumber; do
+      symlink_wants "/usr/lib/systemd/system/${s}.service" default.target || true
+    done
+- trigger: post-files
+  action: |-
+    #!/bin/bash
+    set -eux
+    mkdir -p /etc/systemd/system/local-fs.target.wants
+    ln -sf /etc/systemd/system/grow-rootfs.service \
+      /etc/systemd/system/local-fs.target.wants/grow-rootfs.service
+    systemctl enable bluetooth.service
+    # Default user (ps5/ps5) — Omarchy's own wizard normally creates this on
+    # a real install; images ship it pre-created.
+    useradd -m -G wheel,seat -s /bin/bash ps5
+    echo "ps5:ps5" | chpasswd
+    echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/wheel
+    # No display manager: tty1 autologin starts the session, same as the
+    # Arch/CachyOS/SteamOS images. Mask SDDM in case a pulled-in package
+    # depends on it.
+    ln -sf /usr/lib/systemd/system/multi-user.target /etc/systemd/system/default.target
+    ln -sf /dev/null /etc/systemd/system/sddm.service
+    ln -sf /dev/null /etc/systemd/systemd-firstboot.service
+    mkdir -p /etc/systemd/system/getty@tty1.service.d
+    printf '%s\n' '[Service]' \
+        'ExecStart=' \
+        'ExecStart=-/sbin/agetty --autologin ps5 --noclear %I $TERM' \
+        > /etc/systemd/system/getty@tty1.service.d/autologin.conf
+    # Omarchy's own launcher (`omarchy hyprland`) and session file are not
+    # part of this package set, so launch Hyprland directly.
+    {
+        echo 'if [ "$(tty)" = "/dev/tty1" ] && [ -z "$WAYLAND_DISPLAY" ]; then'
+        echo '    export XDG_RUNTIME_DIR="/tmp/xdg-runtime-$(id -u)"'
+        echo '    mkdir -p "$XDG_RUNTIME_DIR"'
+        echo '    chmod 700 "$XDG_RUNTIME_DIR"'
+        echo '    exec Hyprland'
+        echo 'fi'
+    } >> /home/ps5/.bash_profile
+    chown ps5:ps5 /home/ps5/.bash_profile
+    # Ensure vconsole.conf exists (needed by mkinitcpio sd-vconsole hook)
+    [ -f /etc/vconsole.conf ] || echo "KEYMAP=us" > /etc/vconsole.conf
+    # Drop autodetect — it detects the build host's hardware, not the target.
+    # This produces a larger but hardware-independent initramfs.
+    sed -i 's/ autodetect//' /etc/mkinitcpio.conf
+    # Install custom kernel packages
+    if ls /opt/pkgs/*.pkg.tar.zst 1>/dev/null 2>&1; then
+        pacman -U --noconfirm --ask 4 /opt/pkgs/*.pkg.tar.zst
+        rm -rf /opt/pkgs
+        KVER=$(ls -1t /lib/modules | head -1)
+        mkinitcpio -k "$KVER" -g "/boot/initrd.img-$KVER" || true
+    fi
+    mkdir -p /boot/efi
+    /etc/kernel/postinst.d/zz-update-boot
+mappings:
+  architecture_map: archlinux

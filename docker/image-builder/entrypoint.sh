@@ -84,6 +84,12 @@ EOF
             mkdir -p "$STAGING/pkgs"
             cp /kernel-debs/*.pkg.tar.zst                  "$STAGING/pkgs/"
             ;;
+        omarchy)
+            cp /repo/distros/${DISTRO}/grow-rootfs         "$STAGING/"
+            cp /repo/distros/${DISTRO}/grow-rootfs.service "$STAGING/"
+            mkdir -p "$STAGING/pkgs"
+            cp /kernel-debs/*.pkg.tar.zst                  "$STAGING/pkgs/"
+            ;;
         cachyos)
             mkdir -p "$STAGING/files"
             cp /repo/distros/cachyos/files/grow-rootfs                "$STAGING/files/"
