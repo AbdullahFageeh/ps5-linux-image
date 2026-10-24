@@ -101,7 +101,7 @@ All verbose output goes to `build.log`. The terminal shows a spinner with live p
 | Ubuntu 26.04 (Resolute) | GNOME | `.deb` | systemd |
 | Arch | Sway | `.pkg.tar.zst` | systemd |
 | CachyOS | Gamescope + Steam Big Picture (Arch + `[cachyos]` repo, no v3 migration in image build) | `.pkg.tar.zst` | systemd |
-| Omarchy | Hyprland (Arch + the Omarchy package set, see `distros/omarchy/README.md`) | `.pkg.tar.zst` | systemd |
+| Omarchy | Hyprland (Arch + the Omarchy packages from `pkgs.omarchy.org`, see `distros/omarchy/README.md`) | `.pkg.tar.zst` | systemd |
 
 ## Multi-distro Image
 
@@ -148,7 +148,7 @@ distros/
   ubuntu2604/                   # Ubuntu 26.04 (Resolute)
   arch/                         # Arch Linux
   cachyos/                      # CachyOS repos + Gamescope/Steam
-  omarchy/                      # Omarchy (Arch + Hyprland) package set
+  omarchy/                      # Omarchy (Arch + Hyprland) packages + setup
   shared/                       # Kernel postinst hooks (single + multi)
 boot/
   cmdline.txt                   # Kernel cmdline template (__DISTRO__ placeholder)

@@ -1,34 +1,41 @@
 # omarchy
 
-[Omarchy](https://omarchy.org) — DHH's opinionated Arch + Hyprland desktop —
-built on PS5 hardware with our `linux-ps5` kernel.
+[Omarchy](https://omarchy.org) — DHH's opinionated Arch + Hyprland desktop — on
+PS5 hardware with our `linux-ps5` kernel.
 
 ## How it is built
 
-Omarchy's official installer is an ISO wizard (`archinstall` + the `install/`
-scripts from [omacom/omarchy](https://github.com/omacom/omarchy)); there is no
-supported way to run it headlessly against a pre-made rootfs, so this distro
-does **not** reuse their artifacts. Instead `distros/omarchy/image.yaml` mirrors
-the runtime half of Omarchy's package lists
-(`install/omarchy-base.packages` + `install/omarchy-other.packages`) onto the
-same Arch `distro builder` recipe the Arch image uses:
+Omarchy's installer is an ISO wizard (`archinstall` plus the target-side
+`omarchy apply system` step), but the desktop itself ships as ordinary Arch
+packages in Omarchy's own repo (`omarchy`, `omarchy-settings`,
+`omarchy-keyring`, themes, nvim config, titlebars). Omarchy's own docs describe
+prebuilt images as a supported shape: the builder installs the packages and
+their setup, and hardware leaves run on the machine's first boot
+(`docs/file-layout.md`, `agents/skills/install-scripts.md`).
 
-1. Arch bootstrap → pacman installs the Omarchy package set (Hyprland, Quickshell,
-   waybar-style bar tooling, Chromium, foot, Neovim, PipeWire, Docker, …).
-2. Drop `linux-ps5` (`pacman -U`) and rebuild the initramfs without `autodetect`.
-3. tty1 autologin as `ps5` → `exec Hyprland`.
+So this distro is not a hand-assembled copy of the package lists:
 
-Left out on purpose:
+1. `distros/omarchy/build-rootfs.sh` fetches `omarchy.db` plus the six
+   runtime/support packages from `https://pkgs.omarchy.org/stable/x86_64` into
+   the build cache (`stage-pkgs.sh`), then runs distrobuilder on
+   `distros/omarchy/image.yaml`.
+2. `image.yaml` installs a small Arch base — GPU, session plumbing, network,
+   plus `gum`/`perl`/`sddm` for `omarchy-settings` — drops in `linux-ps5`, and
+   rebuilds the initramfs without `autodetect`.
+3. Its post-files action installs the staged Omarchy packages
+   (`pacman -U --nodeps`, the chroot has no DNS), uses Omarchy's pacman
+   configuration (its repo first, then Arch off Omarchy's stable mirror, as
+   `omarchy apply pacman` would), and runs
+   `distros/omarchy/post-install.sh`: Omarchy's `config/` and `login/` setup
+   leaves (locale, firewall, services, docker, passwordless keyring) and
+   `omarchy-finalize-user` for `ps5`.
+4. Login is tty1 autologin as `ps5` → `exec Hyprland`, no SDDM, matching the
+   Arch / CachyOS / SteamOS images.
 
-- `linux-omarchy` / `linux-omarchy-headers` / `linux-t2` — the PS5 image ships
-  its own patched kernel.
-- DKMS trees for other machines (`nvidia*`, `broadcom-wl-dkms`, `asusctl`,
-  `tuxedo-drivers`, `t2fanrd`, `macbook12-spi-driver-dkms`) — they cannot build
-  against `linux-ps5`, and pulling them in makes the pacman transaction fail.
-- Boot/OS-management pieces of the ISO image (`limine`, `plymouth`, `snapper`,
-  `btrfs-progs`) — PS5 images boot through kexec with a FAT32 EFI partition and
-  an ext4 root.
-- Intel/Apple-only firmware and tools.
+Omarchy's `hardware/` leaves are **not** run at build time: they are the
+per-machine steps (vulkan vendor, bluetooth, wifi regdom, platform fixes), and
+several of them build DKMS modules against the image kernel, which is
+`linux-ps5`, not `linux-omarchy`.
 
 ## Build locally
 
@@ -36,16 +43,19 @@ Left out on purpose:
 ./build_image.sh --distro omarchy
 ```
 
-Image size defaults to the shared 12 GB. The `.img.xz` lands in
-`output/ps5-omarchy.img.xz`.
+The `.img.xz` lands in `output/ps5-omarchy.img.xz`. `OMARCHY_CHANNEL`
+(`stable`, `rc`, `edge`) selects the repo channel; it defaults to `stable`.
 
 ## Caveats
 
-- `omarchy`'s own theme/config repository (`~/.local/share/omarchy`) is not
-  installed; this is the package-level desktop (Hyprland + the apps), not the
-  full Omarchy dotfiles experience. Running Omarchy's installer on the booted
-  PS5 should layer its configs on top, as it would on any Arch install.
-- The PS5 Oberon GPU has no working hardware video decode in mainline Mesa;
-  Chromium will software-decode.
-- Like every PS5 image here, default credentials are `ps5` / `ps5` with
-  passwordless sudo. Change them before exposing the machine to a network.
+- The image ships the Omarchy *packages*. Anything the ISO wizard does outside
+  them — partition layout, LUKS, `limine`/`snapper` boot and snapshot setup —
+  is replaced by this repo's kexec boot flow and ext4 layout, as for every
+  other PS5 image.
+- Some Omarchy packages pull things that only make sense in Omarchy's own
+  installer (e.g. `omarchy-settings` on `plymouth`); the Omarchy packages are
+  installed with `--nodeps` so this does not fail the build, and the image
+  boots with this repo's own `linux-ps5` + kexec flow rather than upstream's.
+  If the transaction fails on the real image, it is the first place to look.
+- Default credentials are `ps5` / `ps5` with passwordless sudo, same as the
+  other images. Change them before exposing the machine to a network.

@@ -19,105 +19,17 @@ packages:
       Server = https://mirrors.kernel.org/archlinux/$repo/os/$arch
   sets:
   - packages:
-    # Runtime subset of install/omarchy-base.packages + omarchy-other.packages.
-    # Left out: ISO-provided kernels (linux-omarchy, linux-t2), DKMS trees
-    # (nvidia*, broadcom-wl, asusctl, tuxedo-drivers, t2fanrd, macbook12-spi),
-    # boot tie-ins (limine*, snapper, plymouth) and Intel/apple-only pieces.
-    - alsa-utils
-    - avahi
+    # The Omarchy package itself lives in Omarchy's repo (installed from the
+    # staged copies in post-files; the container has no DNS inside the chroot)
+    # and pulls Hyprland, Quickshell, uwsm, sddm and the rest of its depends.
+    # This set is the Arch half: what the PS5 image needs, plus the repo
+    # packages omarchy-settings depends on.
     - base
     - base-devel
-    - bash-completion
-    - bat
-    - bluez
-    - bluez-utils
-    - bolt
-    - brightnessctl
-    - btop
-    - chromium
-    - cups
-    - cups-filters
-    - cups-pk-helper
-    - ddcutil
-    - docker
-    - docker-buildx
-    - docker-compose
-    - dosfstools
-    - expac
-    - eza
-    - fakeroot
-    - fastfetch
-    - fd
-    - ffmpeg
-    - ffmpegthumbnailer
-    - fzf
-    - git
-    - gnome-keyring
-    - gnome-themes-extra
-    - grim
+    # Omarchy dependencies not already pulled in by omarchy itself
     - gum
-    - gvfs-mtp
-    - gvfs-nfs
-    - gvfs-smb
-    - hyprland
-    - hyprland-guiutils
-    - hyprland-preview-share-picker
-    - hyprpicker
-    - hyprsunset
-    - imagemagick
-    - imv
-    - inetutils
-    - inotify-tools
-    - inxi
-    - jq
-    - kernel-modules-hook
-    - lazygit
-    - less
-    - libsecret
-    - libvips
-    - libyaml
-    - libreoffice-fresh
-    - lua51
-    - luarocks
-    - man-db
-    - mise-bin
-    - mpv
-    - nautilus
-    - nautilus-python
-    - networkmanager
-    - noto-fonts
-    - noto-fonts-cjk
-    - noto-fonts-emoji
-    - nss-mdns
-    - nvim
-    - pacman-contrib
-    - pamixer
-    - pinta
-    - plocate
-    - power-profiles-daemon
-    - python-gobject
-    - python-poetry-core
-    - qemu-user-static-binfmt
-    - qrencode
-    - quickshell
-    - ripgrep
-    - ruby
-    - socat
-    - starship
-    - sushi
-    - tesseract
-    - tesseract-data-eng
-    - tldr
-    - tmux
-    - tree-sitter-cli
-    - ttf-ia-writer
-    - ttf-jetbrains-mono-nerd-basic
-    - tzupdate
-    - udiskie
-    - unzip
-    - vi
-    - whois
-    - wireless-regdb
+    - perl
+    - sddm
     # Display / GPU (AMD Oberon)
     - mesa
     - vulkan-radeon
@@ -125,42 +37,59 @@ packages:
     - xf86-video-amdgpu
     - libinput
     - xkeyboard-config
-    # Wayland plumbing
-    - foot
+    # Session / plumbing
+    - dbus
+    - egl-wayland
+    - gst-plugin-pipewire
+    - gtk4-layer-shell
     - pipewire
     - pipewire-alsa
     - pipewire-jack
     - pipewire-pulse
-    - wireplumber
-    - gst-plugin-pipewire
-    - gtk4-layer-shell
+    - polkit
     - qt6-base
     - qt6-declarative
     - qt6-imageformats
     - qt6-multimedia
     - qt6-svg
     - qt6-wayland
+    - seatd
+    - wireplumber
     - wl-clipboard
     - wtype
     - xdg-desktop-portal-gtk
     - xdg-desktop-portal-hyprland
-    - xdg-terminal-exec
-    - zbar
+    - zram-generator
+    # Network / bluetooth / audio
+    - bluez
+    - bluez-utils
+    - iw
+    - linux-firmware
+    - networkmanager
+    - wireless-regdb
+    - wpasupplicant
     # System
-    - dbus
+    - dosfstools
     - e2fsprogs
-    - egl-wayland
-    - htop
     - kexec-tools
     - kmod
-    - linux-firmware
     - mkinitcpio
     - openssh
     - parted
-    - polkit
-    - seatd
+    # Utilities the default desktop expects
+    - chromium
+    - ffmpeg
+    - git
+    - jq
+    - less
+    - nano
+    - neovim
+    - noto-fonts
+    - noto-fonts-emoji
+    - ripgrep
     - sudo
-    - zoxide
+    - tmux
+    - vi
     action: install
 files:
 - path: /etc/hostname
@@ -181,9 +110,19 @@ files:
 - path: /etc/systemd/system/grow-rootfs.service
   generator: copy
   source: /tmp/build-staging/grow-rootfs.service
+- path: /usr/local/sbin/omarchy-post-install
+  generator: copy
+  source: /tmp/build-staging/post-install.sh
+  mode: "0755"
 - path: /opt/pkgs/
   generator: copy
   source: /tmp/build-staging/pkgs
+- path: /omarchy-pkgs/
+  generator: copy
+  source: /omarchy-pkgs
+- path: /omarchy-db/
+  generator: copy
+  source: /omarchy-db
 actions:
 - trigger: post-unpack
   action: |-
@@ -220,13 +159,9 @@ actions:
   action: |-
     #!/bin/bash
     set -eux
-    mkdir -p /etc/systemd/system/local-fs.target.wants
-    ln -sf /etc/systemd/system/grow-rootfs.service \
-      /etc/systemd/system/local-fs.target.wants/grow-rootfs.service
-    systemctl enable bluetooth.service
-    # Default user (ps5/ps5) — Omarchy's own wizard normally creates this on
-    # a real install; images ship it pre-created.
-    useradd -m -G wheel,seat -s /bin/bash ps5
+    # Default user (ps5/ps5) before Omarchy's setup runs — its installer
+    # expects the target user to exist.
+    useradd -m -G wheel,seat,video,audio,input -s /bin/bash ps5
     echo "ps5:ps5" | chpasswd
     echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/wheel
     # No display manager: tty1 autologin starts the session, same as the
@@ -240,8 +175,9 @@ actions:
         'ExecStart=' \
         'ExecStart=-/sbin/agetty --autologin ps5 --noclear %I $TERM' \
         > /etc/systemd/system/getty@tty1.service.d/autologin.conf
-    # Omarchy's own launcher (`omarchy hyprland`) and session file are not
-    # part of this package set, so launch Hyprland directly.
+    # Launch the Hyprland session directly; Omarchy's configs/packages come
+    # from /etc/skel + omarchy-finalize-user, so no uwsm/greetd wrapper is
+    # needed (and greetd has no VT handoff path on the PS5).
     {
         echo 'if [ "$(tty)" = "/dev/tty1" ] && [ -z "$WAYLAND_DISPLAY" ]; then'
         echo '    export XDG_RUNTIME_DIR="/tmp/xdg-runtime-$(id -u)"'
@@ -265,5 +201,11 @@ actions:
     fi
     mkdir -p /boot/efi
     /etc/kernel/postinst.d/zz-update-boot
+    # Omarchy packages + system setup (see distros/omarchy/post-install.sh).
+    # Runs last: Omarchy's own leaves set services and PAM state that the
+    # steps above would otherwise overwrite.
+    export DISTRO OMARCHY_PATH=/usr/share/omarchy
+    . /usr/local/sbin/omarchy-post-install
+    rm -f /usr/local/sbin/omarchy-post-install
 mappings:
   architecture_map: archlinux
